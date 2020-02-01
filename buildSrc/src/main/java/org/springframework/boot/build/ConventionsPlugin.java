@@ -16,15 +16,18 @@
 
 package org.springframework.boot.build;
 
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import io.spring.javaformat.gradle.FormatTask;
 import io.spring.javaformat.gradle.SpringJavaFormatPlugin;
 import org.apache.maven.artifact.repository.MavenArtifactRepository;
 import org.asciidoctor.gradle.jvm.AsciidoctorJPlugin;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.DependencySet;
+import org.gradle.api.plugins.JavaBasePlugin;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.plugins.quality.CheckstyleExtension;
@@ -44,20 +47,24 @@ import org.gradle.api.tasks.compile.JavaCompile;
 import org.gradle.api.tasks.javadoc.Javadoc;
 import org.gradle.api.tasks.testing.Test;
 
+import org.springframework.boot.build.testing.TestFailuresPlugin;
+
 /**
  * Plugin to apply conventions to projects that are part of Spring Boot's build.
  * Conventions are applied in response to various plugins being applied.
  *
  * <p/>
  *
- * When the {@link JavaPlugin Java plugin} is applied:
+ * When the {@link JavaBasePlugin Java base plugin} is applied:
  *
  * <ul>
  * <li>{@code sourceCompatibility} is set to {@code 1.8}
- * <li>Spring Java Format and Checkstyle plugins are applied
+ * <li>{@link SpringJavaFormatPlugin Spring Java Format}, {@link CheckstylePlugin
+ * Checkstyle}, and {@link TestFailuresPlugin Test Failures} plugins are applied
  * <li>{@link Test} tasks are configured to use JUnit Platform and use a max heap of 1024M
- * <li>{@link JavaCompile} tasks are configured to use UTF-8 encoding
- * <li>{@link Javadoc} tasks are configured to use UTF-8 encoding
+ * <li>{@link JavaCompile}, {@link Javadoc}, and {@link FormatTask} tasks are configured
+ * to use UTF-8 encoding
+ * <li>{@link JavaCompile} tasks are configured to use {@code -parameters}
  * <li>{@link Jar} tasks are configured to have the following manifest entries:
  * <ul>
  * <li>{@code Automatic-Module-Name}
@@ -101,10 +108,17 @@ public class ConventionsPlugin implements Plugin<Project> {
 	}
 
 	private void applyJavaConventions(Project project) {
-		project.getPlugins().withType(JavaPlugin.class, (java) -> {
+		project.getPlugins().withType(JavaBasePlugin.class, (java) -> {
+			project.getPlugins().apply(TestFailuresPlugin.class);
 			configureSpringJavaFormat(project);
 			project.setProperty("sourceCompatibility", "1.8");
-			project.getTasks().withType(JavaCompile.class, (compile) -> compile.getOptions().setEncoding("UTF-8"));
+			project.getTasks().withType(JavaCompile.class, (compile) -> {
+				compile.getOptions().setEncoding("UTF-8");
+				List<String> args = compile.getOptions().getCompilerArgs();
+				if (!args.contains("-parameters")) {
+					args.add("-parameters");
+				}
+			});
 			project.getTasks().withType(Javadoc.class,
 					(javadoc) -> javadoc.getOptions().source("1.8").encoding("UTF-8"));
 			project.getTasks().withType(Test.class, (test) -> {
@@ -129,6 +143,7 @@ public class ConventionsPlugin implements Plugin<Project> {
 
 	private void configureSpringJavaFormat(Project project) {
 		project.getPlugins().apply(SpringJavaFormatPlugin.class);
+		project.getTasks().withType(FormatTask.class, (formatTask) -> formatTask.setEncoding("UTF-8"));
 		project.getPlugins().apply(CheckstylePlugin.class);
 		CheckstyleExtension checkstyle = project.getExtensions().getByType(CheckstyleExtension.class);
 		checkstyle.setToolVersion("8.22");

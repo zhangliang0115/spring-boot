@@ -16,6 +16,8 @@
 
 package org.springframework.boot.autoconfigure.cassandra;
 
+import com.datastax.oss.driver.api.core.CqlIdentifier;
+import com.datastax.oss.driver.api.core.CqlSessionBuilder;
 import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.core.config.DriverExecutionProfile;
@@ -43,12 +45,37 @@ class CassandraAutoConfigurationTests {
 			.withConfiguration(AutoConfigurations.of(CassandraAutoConfiguration.class));
 
 	@Test
+	void cqlSessionBuildHasScopePrototype() {
+		this.contextRunner.run((context) -> {
+			CqlIdentifier keyspace = CqlIdentifier.fromCql("test");
+			CqlSessionBuilder firstBuilder = context.getBean(CqlSessionBuilder.class);
+			assertThat(firstBuilder.withKeyspace(keyspace)).hasFieldOrPropertyWithValue("keyspace", keyspace);
+			CqlSessionBuilder secondBuilder = context.getBean(CqlSessionBuilder.class);
+			assertThat(secondBuilder).hasFieldOrPropertyWithValue("keyspace", null);
+		});
+	}
+
+	@Test
 	void driverConfigLoaderWithDefaultConfiguration() {
 		this.contextRunner.run((context) -> {
 			assertThat(context).hasSingleBean(DriverConfigLoader.class);
 			assertThat(context.getBean(DriverConfigLoader.class).getInitialConfig().getDefaultProfile()
 					.isDefined(DefaultDriverOption.SESSION_NAME)).isFalse();
 		});
+	}
+
+	@Test
+	void driverConfigLoaderWithContactPoints() {
+		this.contextRunner.withPropertyValues("spring.data.cassandra.contact-points=cluster.example.com:9042",
+				"spring.data.cassandra.local-datacenter=cassandra-eu1").run((context) -> {
+					assertThat(context).hasSingleBean(DriverConfigLoader.class);
+					DriverExecutionProfile configuration = context.getBean(DriverConfigLoader.class).getInitialConfig()
+							.getDefaultProfile();
+					assertThat(configuration.getStringList(DefaultDriverOption.CONTACT_POINTS))
+							.containsOnly("cluster.example.com:9042");
+					assertThat(configuration.getString(DefaultDriverOption.LOAD_BALANCING_LOCAL_DATACENTER))
+							.isEqualTo("cassandra-eu1");
+				});
 	}
 
 	@Test

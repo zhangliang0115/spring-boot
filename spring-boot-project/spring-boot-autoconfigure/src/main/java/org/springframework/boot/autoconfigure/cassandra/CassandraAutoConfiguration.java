@@ -44,6 +44,7 @@ import org.springframework.boot.context.properties.PropertyMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.annotation.Scope;
 
 /**
  * {@link EnableAutoConfiguration Auto-configuration} for Cassandra.
@@ -69,6 +70,7 @@ public class CassandraAutoConfiguration {
 
 	@Bean
 	@ConditionalOnMissingBean
+	@Scope("prototype")
 	public CqlSessionBuilder cassandraSessionBuilder(CassandraProperties properties,
 			DriverConfigLoader driverConfigLoader, ObjectProvider<CqlSessionBuilderCustomizer> builderCustomizers) {
 		CqlSessionBuilder builder = CqlSession.builder().withConfigLoader(driverConfigLoader);
@@ -114,6 +116,8 @@ public class CassandraAutoConfiguration {
 		mapPoolingOptions(properties, options);
 		map.from(properties::getContactPoints)
 				.to((contactPoints) -> options.add(DefaultDriverOption.CONTACT_POINTS, contactPoints));
+		map.from(properties.getLocalDatacenter()).to(
+				(localDatacenter) -> options.add(DefaultDriverOption.LOAD_BALANCING_LOCAL_DATACENTER, localDatacenter));
 		ConfigFactory.invalidateCaches();
 		return ConfigFactory.defaultOverrides().withFallback(options.build())
 				.withFallback(ConfigFactory.defaultReference()).resolve();
